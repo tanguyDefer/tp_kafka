@@ -15,7 +15,11 @@ bin/kafka-server-start.sh config/server.properties
 ```
 * Pour lancer notre programme, ouvrir un terminal dans le projet et faire la commande:
 ```bash
-python 3 /CHEMIN/DU/FICHIER/chat_client.py /join #general
+python 3 /CHEMIN/DU/FICHIER/chat_client.py USER
+```
+* Dans notre programme pour rejoindre un channel:
+```bash
+/join #CHANNEL_NAME
 ```
 * Pour lancer le producer kafka, se mettre dans le dossier kafka et faire la commande:
 ```bash
