@@ -37,23 +37,21 @@ def cmd_msg(producer, channel, line):
 def cmd_join(nick_name,consumer, producer, args):
     try:
         consumer.subscribe("chat_channel_" + args[1:])
-        SUB_CHANNELS.append(args)
+        if args not in SUB_CHANNELS:
+            SUB_CHANNELS.append(args)
         log.info("%s has joined chat channel %s",nick_name, args[1:])
         log.info("List of %s's channels : %s",nick_name, SUB_CHANNELS)
-        return True
     except Exception as err:
         log.error("Subscribe to : %s failed", err)
-        return False
 
 
 def cmd_part(nick_name, consumer, producer, args):
-    """_summary_
+    """function to quit a channel and join one of user's channels
 
     Args:
         consumer (_type_): kaka consumer
         producer (_type_): kafka producer
-        args (_type_): _description_
-
+        args (_type_): channel to quit
     Returns:
         _type_: subscribe channel or False
     """
@@ -78,7 +76,7 @@ def cmd_quit(producer, line):
     pass
 
 def channels_in_topic():
-    """Permet de transformer #general en chat_channel_general"""
+    """function to transform #general to chat_channel_general"""
     formated_channels = []
     for channel in SUB_CHANNELS:
         formated_channels.append("chat_channel_" + channel[1:])
@@ -93,13 +91,10 @@ def check_channel_format(args):
     Returns:
         True or False
     """
-    try:
-        re.match(r'^#[a-zA-Z0-9_-]+$', args)
+    if re.match(r'^#[a-zA-Z0-9_-]+$', args):
         return True
-    except Exception as err:
-        log.error("Incorrect channel format: %s", err)
-        return False
-
+    log.error("Incorrect channel format for '%s', channel format must be like '#general'", args)
+    return False
 
 def main_loop(nick_name, consumer, producer):
     curchan = None
@@ -123,20 +118,20 @@ def main_loop(nick_name, consumer, producer):
             args = line
 
         if not check_channel_format(args):
-            break
-
-        if cmd == "msg":
-            cmd_msg(producer, curchan, args)
-        elif cmd == "join":
-            if cmd_join(nick_name, consumer, producer, args):
-                curchan = args
-        elif cmd == "part":
-            return_value = cmd_part(nick_name,consumer, producer, args)
-            if return_value or None:
-                curchan = SUB_CHANNELS[-1]
-        elif cmd == "quit":
-            cmd_quit(producer, args)
-            break
+            continue
+        else:
+            if cmd == "msg":
+                cmd_msg(producer, curchan, args)
+            elif cmd == "join":
+                if cmd_join(nick_name, consumer, producer, args):
+                    curchan = args
+            elif cmd == "part":
+                return_value = cmd_part(nick_name,consumer, producer, args)
+                if return_value or None:
+                    curchan = SUB_CHANNELS[-1]
+            elif cmd == "quit":
+                cmd_quit(producer, args)
+                break
 
 
 def main():
