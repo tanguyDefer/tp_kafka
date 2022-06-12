@@ -2,6 +2,7 @@
 
 import logging
 import re
+from socket import timeout
 import sys
 import threading
 
@@ -10,6 +11,7 @@ from kafka import KafkaConsumer, KafkaProducer
 
 should_quit = False
 SUB_CHANNELS = []
+
 
 
 # Configuration du logger
@@ -53,16 +55,17 @@ def read_messages(consumer):
 
 
 
-def cmd_msg(producer, curchan, args, nick_name):
+def cmd_msg(consumer, producer, curchan, args, nick_name):
     if curchan:
-        try:
             log.info("Sending message to %s ...", curchan)
             formated_curchan = "chat_channel_" + curchan[1:]
             message = nick_name + ": " + args
-            producer.send(formated_curchan, str.encode(message))
-            log.info("message sent by %s on channel %s", nick_name, curchan)
-        except Exception as err:
-            log.error("Impossible to send message ... %s", err)
+            try:
+                producer.send(formated_curchan, str.encode(message)).get(timeout=5)
+                producer.flush()
+                log.info("Message sent by %s on channel %s", nick_name, curchan)
+            except Exception as err:
+                log.warning("Impossible to send message ... %s", err)
     else:
         log.warning("No active channel")
 
@@ -91,19 +94,21 @@ def cmd_part(nick_name, consumer, producer, args):
         _type_: subscribe channel or False
     """
     if args in SUB_CHANNELS:
-        if len(SUB_CHANNELS) < 1:
+        if len(SUB_CHANNELS) == 0:
             log.warning("No channel subscribe")
-            return None
         else:
-            print("ARGS IN PART :" , args)
+            if len(SUB_CHANNELS) == 1:
+                log.warning("You will not subscribe to any channels ... redirect to channels list")
+                consumer.unsubscribe()
+                log.info("%s has left chat channel : %s",nick_name, args[1:])
+                SUB_CHANNELS.remove(args)
+                main()
             consumer.unsubscribe()
             log.info("%s has left chat channel : %s",nick_name, args[1:])
             SUB_CHANNELS.remove(args)
-            # TODO attention création d'un  new chan pas bon
             cmd_join(nick_name,consumer, producer, SUB_CHANNELS[-1])
-            return True
     else:
-        log.error("%s is not in your channels", args)
+        log.warning("%s is not in your channels", args)
         return False
 
 def cmd_quit(producer, line):
@@ -153,7 +158,7 @@ def main_loop(nick_name, consumer, producer):
             args = line
 
         if cmd == "msg":
-            cmd_msg(producer, curchan, args, nick_name)
+            cmd_msg(consumer, producer, curchan, args, nick_name)
         elif cmd == "join":
             if check_channel_format(args) and cmd_join(nick_name, consumer, producer, args):
                 curchan = args
