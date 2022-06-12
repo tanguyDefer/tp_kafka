@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+from asyncio.log import logger
 import logging
 import re
 import sys
@@ -7,10 +8,11 @@ import threading
 
 import coloredlogs
 from kafka import KafkaConsumer, KafkaProducer
+from pyspark import SparkContext
+from pyspark.streaming import StreamingContext
 
 should_quit = False
 SUB_CHANNELS = []
-
 
 
 # Configuration du logger
@@ -51,7 +53,6 @@ def read_messages(consumer):
         for channel, messages in received.items():
             for msg in messages:
                 print("< %s: %s" % (channel.topic, msg.value))
-
 
 
 def cmd_msg(producer, curchan, message, nick_name):
@@ -114,6 +115,7 @@ def cmd_part(nick_name, consumer, producer, args):
         log.warning("%s is not in your channels", args)
         return False
 
+
 def info_message_to_channel(producer, args, message_to_channel):
     formated_channel = "chat_channel_" + args[1:]
     producer.send(formated_channel, str.encode(message_to_channel))
@@ -147,6 +149,7 @@ def check_channel_format(args):
         return True
     log.error("Incorrect channel format for '%s', channel format must be like '#general'", args)
     return False
+
 
 def main_loop(nick_name, consumer, producer):
     curchan = None
@@ -183,16 +186,38 @@ def main_loop(nick_name, consumer, producer):
             break
 
 
+def funct_sort(rdd):
+    return rdd.sortBy(lambda p: p[1], ascending=False)
+
+
 def main():
     if len(sys.argv) != 2:
         log.warning("usage: %s nick_name" % sys.argv[0])
         return 1
+
+
 
     nick_name = sys.argv[1]
     consumer = KafkaConsumer()
     producer = KafkaProducer()
     th = threading.Thread(target=read_messages, args=(consumer,))
     th.start()
+
+    # sc = SparkContext()
+    # ssc = StreamingContext(sc, 10)
+
+    # lines = ssc.socketTextStream("localhost", "9092")
+    # counts = lines.flatMap(lambda line: line.split(" ")).map(lambda word: (word, 1)).reduceByKey(lambda a, b: a+b)
+    # transform = counts.transform(funct_sort)
+    # transform.saveAsTextFiles("savedTransform.txt")
+    # transform.pprint()
+
+    # ssc.start()
+    # ssc.awaitTermination()
+
+
+
+
     try:
         main_loop(nick_name, consumer, producer)
     finally:
