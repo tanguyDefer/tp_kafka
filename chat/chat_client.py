@@ -2,7 +2,6 @@
 
 import logging
 import re
-from socket import timeout
 import sys
 import threading
 
@@ -55,11 +54,11 @@ def read_messages(consumer):
 
 
 
-def cmd_msg(consumer, producer, curchan, args, nick_name):
+def cmd_msg(producer, curchan, message, nick_name):
     if curchan:
             log.info("Sending message to %s ...", curchan)
             formated_curchan = "chat_channel_" + curchan[1:]
-            message = nick_name + ": " + args
+            message = nick_name + ": " + message
             try:
                 producer.send(formated_curchan, str.encode(message)).get(timeout=5)
                 producer.flush()
@@ -75,7 +74,9 @@ def cmd_join(nick_name,consumer, producer, args):
         consumer.subscribe("chat_channel_" + args[1:])
         if args not in SUB_CHANNELS:
             SUB_CHANNELS.append(args)
-        log.info("%s has joined chat channel %s",nick_name, args[1:])
+        message_to_channel = "{} has joined chat channel : {} ".format(nick_name, args[1:])
+        log.info(message_to_channel)
+        info_message_to_channel(producer, args, message_to_channel)
         log.info("List of %s's channels : %s",nick_name, SUB_CHANNELS)
         return True
     except Exception as err:
@@ -99,8 +100,10 @@ def cmd_part(nick_name, consumer, producer, args):
         else:
             if len(SUB_CHANNELS) == 1:
                 log.warning("You will not subscribe to any channels ... redirect to channels list")
+                message_to_channel = "{} has left chat channel : {} ".format(nick_name, args[1:])
+                log.info(message_to_channel)
+                info_message_to_channel(producer, args, message_to_channel)
                 consumer.unsubscribe()
-                log.info("%s has left chat channel : %s",nick_name, args[1:])
                 SUB_CHANNELS.remove(args)
                 main()
             consumer.unsubscribe()
@@ -111,9 +114,18 @@ def cmd_part(nick_name, consumer, producer, args):
         log.warning("%s is not in your channels", args)
         return False
 
-def cmd_quit(producer, line):
-    # TODO À compléter
-    pass
+def info_message_to_channel(producer, args, message_to_channel):
+    formated_channel = "chat_channel_" + args[1:]
+    producer.send(formated_channel, str.encode(message_to_channel))
+
+
+def cmd_quit(producer, args, nick_name):
+    message_to_channel = "{} has disconnected".format(nick_name)
+    for channel in SUB_CHANNELS:
+        info_message_to_channel(producer, channel, message_to_channel)
+        log.info("Disconnected")
+    producer.quit()
+
 
 def channels_in_topic():
     """function to transform #general to chat_channel_general"""
@@ -158,7 +170,7 @@ def main_loop(nick_name, consumer, producer):
             args = line
 
         if cmd == "msg":
-            cmd_msg(consumer, producer, curchan, args, nick_name)
+            cmd_msg(producer, curchan, args, nick_name)
         elif cmd == "join":
             if check_channel_format(args) and cmd_join(nick_name, consumer, producer, args):
                 curchan = args
@@ -167,7 +179,7 @@ def main_loop(nick_name, consumer, producer):
             if return_value or None:
                 curchan = SUB_CHANNELS[-1]
         elif cmd == "quit":
-            cmd_quit(producer, args)
+            cmd_quit(producer, args, nick_name)
             break
 
 
@@ -187,7 +199,6 @@ def main():
         global should_quit
         should_quit = True
         th.join()
-
 
 
 if __name__ == "__main__":
