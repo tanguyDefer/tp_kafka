@@ -118,11 +118,16 @@ def cmd_part(nick_name, consumer, producer, args):
                 info_message_to_channel(producer, args, message_to_channel)
                 consumer.unsubscribe()
                 SUB_CHANNELS.remove(args)
-                main()
+                return True
             consumer.unsubscribe()
             log.info("%s has left chat channel : %s",nick_name, args[1:])
+            message_to_channel = "{} has left chat channel : {} ".format(nick_name, args[1:])
+            info_message_to_channel(producer, args, message_to_channel)
+            consumer.unsubscribe()
             SUB_CHANNELS.remove(args)
-            cmd_join(nick_name,consumer, producer, SUB_CHANNELS[-1])
+            log.warning(consumer)
+            # is_active(nick_name,consumer, producer, SUB_CHANNELS[-1])
+            return True
     else:
         log.warning("%s is not in your channels", args)
         return False
