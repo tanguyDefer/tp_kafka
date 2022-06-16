@@ -7,6 +7,7 @@ import threading
 
 import coloredlogs
 from kafka import KafkaConsumer, KafkaProducer
+from pyparsing import empty
 
 should_quit = False
 SUB_CHANNELS = []
@@ -42,7 +43,6 @@ coloredlogs.install(
 
 
 def read_messages(consumer):
-    # TODO À compléter
     while not should_quit:
         # On utilise poll pour ne pas bloquer indéfiniment quand should_quit
         # devient True
@@ -56,7 +56,7 @@ def read_messages(consumer):
 def cmd_msg(producer, curchan, message, nick_name):
     if curchan:
         log.info("Sending message to %s ...", curchan)
-        formated_curchan = "chat_channel_" + curchan[1:]
+        formated_curchan = format_channel_name(curchan)
         formated_message = str.encode(nick_name + ": " + message)
         try:
             # Kafka attend un message format bytes, il faut donc convertir avec str.encode()
@@ -72,7 +72,7 @@ def cmd_msg(producer, curchan, message, nick_name):
 
 def cmd_join(nick_name,consumer, producer, args):
     try:
-        consumer.subscribe("chat_channel_" + args[1:])
+        consumer.subscribe(format_channel_name(args))
         if args not in SUB_CHANNELS:
             SUB_CHANNELS.append(args)
         message_to_channel = "{} has joined chat channel : {} ".format(nick_name, args[1:])
@@ -125,8 +125,6 @@ def cmd_part(nick_name, consumer, producer, args):
             info_message_to_channel(producer, args, message_to_channel)
             consumer.unsubscribe()
             SUB_CHANNELS.remove(args)
-            log.warning(consumer)
-            # is_active(nick_name,consumer, producer, SUB_CHANNELS[-1])
             return True
     else:
         log.warning("%s is not in your channels", args)
@@ -188,15 +186,17 @@ def main_loop(nick_name, consumer, producer):
             cmd_msg(producer, curchan, args, nick_name)
         elif cmd == "join":
             if check_channel_format(args):
-                cmd_join(nick_name, consumer, producer, args)
-                curchan = args
+                if cmd_join(nick_name, consumer, producer, args):
+                    curchan = args
         elif cmd == "active":
             if is_active(args):
                 curchan = args
         elif cmd == "part":
-            return_value = cmd_part(nick_name,consumer, producer, args)
-            if return_value or None:
-                curchan = SUB_CHANNELS[-1]
+            if cmd_part(nick_name,consumer, producer, args) or None:
+                if SUB_CHANNELS == []:
+                    curchan = None
+                else:
+                    curchan = SUB_CHANNELS[-1]
         elif cmd == "quit":
             cmd_quit(producer, nick_name)
             break
